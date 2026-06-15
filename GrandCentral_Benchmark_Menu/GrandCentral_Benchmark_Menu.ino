@@ -362,6 +362,15 @@ void primesEnter()
     primeCount       = 0;
     primesInWindow   = 0;
     primeWindowStart = millis();
+
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Prime Number Gen");
+    display.println();
+    display.println("Starting...");
+    display.println();
+    display.println("Press to exit");
+    display.display();
 }
 
 bool isPrime(unsigned long n)
@@ -440,6 +449,15 @@ void cpuEnter()
     cpuSumUs       = 0;
     cpuMinUs       = 0xFFFFFFFF;
     cpuMaxUs       = 0;
+
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("CPU Load Monitor");
+    display.println();
+    display.println("Starting...");
+    display.println();
+    display.println("Press to exit");
+    display.display();
 }
 
 void cpuDoWork()
@@ -1570,7 +1588,7 @@ void loop()
         {
             if (appState == STATE_USB_DRIVE)
                 usbDriveExit();
-            startAppFromMenuIndex(startupMenuIndex);
+            openServiceMenu();
         }
     }
 
