@@ -23,6 +23,34 @@ The `core_portme.*` port files and `ee_printf.cpp` have been adapted to:
 4. After ~10-20 seconds it prints the CoreMark score (iterations/sec) and
    validation values. Divide the score by 120 for CoreMark/MHz.
 
+## Arduino IDE Progress Sketch
+
+`GrandCentral_Benchmark_Menu/GrandCentral_Benchmark_Menu.ino` is the current
+Grand Central M4 Arduino IDE progress sketch. It combines:
+
+- Rotary encoder + 128x64 OLED menu
+- Prime-number and CPU-load benchmark screens
+- BioResonance Pro menu prototype
+- AD9833 DDS control on SPI with FSYNC on D10
+- MCP4551 digital volume control on I2C
+- Relative speaker feedback readback on A0
+- QSPI flash log browser and optional USB mass-storage log access
+
+Board settings used for the latest local compile:
+
+- Board: **Adafruit Grand Central M4 (SAMD51)**
+- USB Stack: **TinyUSB**
+- CPU Speed: **120 MHz**
+- Optimization: **Small (-Os)**
+- QSPI Speed: **50 MHz**
+
+The sketch will not compile with the default Arduino USB stack because it uses
+`Adafruit_TinyUSB` for USB drive mode.
+
+Before connecting a speaker, verify the D6 amplifier control polarity on the
+bench. The sketch treats D6 as an active-high output enable, while the hardware
+net has also been called `AMP_MUTE` in the daughter-board schematic.
+
 ## License
 
 CoreMark core sources are Copyright EEMBC, licensed under the
