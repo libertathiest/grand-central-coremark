@@ -87,6 +87,7 @@ bool usbDriveActive = false;
 
 const char *LOG_FILE   = "/benchmarks.log";
 const char *USAGE_FILE = "/usage.log";
+const char *STARTUP_APP_FILE = "/startup_app.txt";
 
 // Cap each log file at this size. Once a log reaches the cap it is renamed
 // to "<path>.old" (replacing any previous .old) and a fresh file is started,
@@ -263,6 +264,10 @@ const char *menuItems[] = { "Prime Number Gen", "CPU Load Monitor",
                              "USB Drive Mode" };
 const int NUM_ITEMS = 5;
 int        menuIndex = 0;
+int        startupMenuIndex = 2; // Default product mode: BioResonance Pro.
+bool       serviceMenuVisible = false;
+uint32_t   serviceMenuHoldStartMs = 0;
+bool       serviceMenuComboWasHeld = false;
 
 enum AppState
 {
@@ -274,6 +279,58 @@ enum AppState
     STATE_USB_DRIVE
 };
 AppState appState = STATE_MENU;
+
+int stateForMenuIndex(int index)
+{
+    switch (index)
+    {
+        case 0:
+            return STATE_PRIMES;
+        case 1:
+            return STATE_CPU;
+        case 2:
+            return STATE_BIORESONANCE;
+        case 3:
+            return STATE_FILES;
+        case 4:
+            return STATE_USB_DRIVE;
+        default:
+            return STATE_BIORESONANCE;
+    }
+}
+
+void saveStartupApp()
+{
+    if (!fsReady || usbDriveActive)
+        return;
+
+    File32 f = fatfs.open(STARTUP_APP_FILE, O_WRITE | O_CREAT | O_TRUNC);
+    if (!f)
+        return;
+    f.println(startupMenuIndex);
+    f.close();
+}
+
+void loadStartupApp()
+{
+    startupMenuIndex = 2;
+    if (!fsReady)
+        return;
+
+    File32 f = fatfs.open(STARTUP_APP_FILE, FILE_READ);
+    if (!f)
+        return;
+
+    char buf[8] = { 0 };
+    int  n      = f.read(buf, sizeof(buf) - 1);
+    f.close();
+    if (n <= 0)
+        return;
+
+    int index = atoi(buf);
+    if (index >= 0 && index < NUM_ITEMS)
+        startupMenuIndex = index;
+}
 
 void drawMenu()
 {
@@ -1322,6 +1379,79 @@ void bioLoop()
         bioDrawPresetMenu();
 }
 
+void startAppFromMenuIndex(int index)
+{
+    menuIndex = index;
+    appState  = (AppState)stateForMenuIndex(index);
+    serviceMenuVisible = (appState == STATE_MENU);
+
+    switch (appState)
+    {
+        case STATE_PRIMES:
+            primesEnter();
+            break;
+        case STATE_CPU:
+            cpuEnter();
+            break;
+        case STATE_BIORESONANCE:
+            bioEnter();
+            break;
+        case STATE_FILES:
+            filesEnter();
+            break;
+        case STATE_USB_DRIVE:
+            usbDriveEnter();
+            break;
+        case STATE_MENU:
+            drawMenu();
+            break;
+    }
+}
+
+void openServiceMenu()
+{
+    if (appState == STATE_USB_DRIVE)
+        usbDriveExit();
+    if (appState == STATE_BIORESONANCE)
+        bioSetOutputEnabled(false);
+
+    appState = STATE_MENU;
+    serviceMenuVisible = true;
+    menuIndex = startupMenuIndex;
+    drawMenu();
+}
+
+bool handleServiceMenuCombo()
+{
+    bool bothHeld = encSwHeld && (digitalRead(BIO_OUTPUT_SW) == LOW);
+
+    if (!bothHeld)
+    {
+        serviceMenuHoldStartMs = 0;
+        serviceMenuComboWasHeld = false;
+        return false;
+    }
+
+    if (serviceMenuHoldStartMs == 0)
+        serviceMenuHoldStartMs = millis();
+
+    if (!serviceMenuComboWasHeld && millis() - serviceMenuHoldStartMs >= 2000)
+    {
+        serviceMenuComboWasHeld = true;
+        openServiceMenu();
+    }
+
+    return true;
+}
+
+void chooseServiceMenuItem()
+{
+    startupMenuIndex = menuIndex;
+    saveStartupApp();
+    serviceMenuVisible = false;
+    startAppFromMenuIndex(menuIndex);
+}
+
 // ---------------------------------------------------------------------
 // Setup / main loop
 // ---------------------------------------------------------------------
@@ -1388,12 +1518,15 @@ void setup()
         Serial.println("Flash filesystem not found/formatted");
     }
 
-    drawMenu();
+    loadStartupApp();
+    startAppFromMenuIndex(startupMenuIndex);
 }
 
 void loop()
 {
     updateEncSw();
+    if (handleServiceMenuCombo())
+        return;
 
     // Encoder rotation
     if (encDelta != 0)
@@ -1406,7 +1539,8 @@ void loop()
         if (appState == STATE_MENU)
         {
             menuIndex = (menuIndex + delta + NUM_ITEMS) % NUM_ITEMS;
-            drawMenu();
+            if (serviceMenuVisible)
+                drawMenu();
         }
         else if (appState == STATE_BIORESONANCE)
         {
@@ -1427,36 +1561,14 @@ void loop()
     {
         if (appState == STATE_MENU)
         {
-            switch (menuIndex)
-            {
-                case 0:
-                    primesEnter();
-                    appState = STATE_PRIMES;
-                    break;
-                case 1:
-                    cpuEnter();
-                    appState = STATE_CPU;
-                    break;
-                case 2:
-                    bioEnter();
-                    appState = STATE_BIORESONANCE;
-                    break;
-                case 3:
-                    filesEnter();
-                    appState = STATE_FILES;
-                    break;
-                case 4:
-                    usbDriveEnter();
-                    appState = STATE_USB_DRIVE;
-                    break;
-            }
+            if (serviceMenuVisible)
+                chooseServiceMenuItem();
         }
         else
         {
             if (appState == STATE_USB_DRIVE)
                 usbDriveExit();
-            appState = STATE_MENU;
-            drawMenu();
+            startAppFromMenuIndex(startupMenuIndex);
         }
     }
 
