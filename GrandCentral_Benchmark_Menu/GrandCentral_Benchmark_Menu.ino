@@ -1423,7 +1423,9 @@ void openServiceMenu()
 
 bool handleServiceMenuCombo()
 {
-    bool bothHeld = encSwHeld && (digitalRead(BIO_OUTPUT_SW) == LOW);
+    bool encRawPressed = (digitalRead(ENC_SW) == LOW);
+    bool outputRawPressed = (digitalRead(BIO_OUTPUT_SW) == LOW);
+    bool bothHeld = encRawPressed && outputRawPressed;
 
     if (!bothHeld)
     {
