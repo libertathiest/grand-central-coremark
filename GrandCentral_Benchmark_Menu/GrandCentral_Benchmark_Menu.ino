@@ -1588,7 +1588,12 @@ void loop()
         {
             if (appState == STATE_USB_DRIVE)
                 usbDriveExit();
-            openServiceMenu();
+
+            AppState startupState = (AppState)stateForMenuIndex(startupMenuIndex);
+            if (appState == startupState)
+                openServiceMenu();
+            else
+                startAppFromMenuIndex(startupMenuIndex);
         }
     }
 
