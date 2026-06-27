@@ -67,6 +67,9 @@ uint32_t lastFrameMs = 0;
 uint16_t baseFreqHz = 432;
 uint8_t theme = 0;
 bool buttonWasDown = false;
+bool layoutDrawn = false;
+
+const uint16_t FRAME_INTERVAL_MS = 160;
 
 uint16_t rgb(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -107,10 +110,10 @@ void encoderIsr()
 void splash()
 {
   tft.fillScreen(TFT_BLACK);
-  for (int r = 4; r < min(W, H) / 2; r += 5)
+  for (int r = 4; r < min(W, H) / 2; r += 3)
   {
     tft.drawCircle(W / 2, H / 2, r, wheel(r * 4));
-    delay(12);
+    delay(28);
   }
 
   tft.setTextWrap(false);
@@ -126,7 +129,53 @@ void splash()
   tft.getTextBounds("RESONANCE PRO", 0, 0, &x1, &y1, &tw, &th);
   tft.setCursor((W - tw) / 2, H / 2 + 8);
   tft.print("RESONANCE PRO");
-  delay(750);
+  delay(2500);
+}
+
+void drawStaticLayout()
+{
+  tft.fillScreen(TFT_BLACK);
+  drawHeader(baseFreqHz);
+
+  int fx = 8;
+  int fy = 42;
+  int fw = W / 2 - 14;
+  int fh = 72;
+  tft.fillRoundRect(fx, fy, fw, fh, 6, rgb(12, 22, 34));
+  tft.drawRoundRect(fx, fy, fw, fh, 6, rgb(52, 110, 150));
+  tft.setTextColor(rgb(130, 210, 255));
+  tft.setTextSize(1);
+  tft.setCursor(fx + 9, fy + 8);
+  tft.print("FREQUENCY");
+  tft.setCursor(fx + 12, fy + 58);
+  tft.print("30 - 2000 Hz sweep");
+
+  int px = W / 2 + 6;
+  int py = 42;
+  int pw = W / 2 - 14;
+  int ph = 72;
+  tft.fillRoundRect(px, py, pw, ph, 6, rgb(18, 16, 28));
+  tft.drawRoundRect(px, py, pw, ph, 6, rgb(120, 75, 190));
+  tft.setTextColor(rgb(220, 190, 255));
+  tft.setCursor(px + 9, py + 8);
+  tft.print("OUTPUT POWER");
+
+  int wx = 8;
+  int wy = 126;
+  int ww = W - 16;
+  int wh = 78;
+  tft.fillRoundRect(wx, wy, ww, wh, 6, rgb(5, 8, 12));
+  tft.drawRoundRect(wx, wy, ww, wh, 6, rgb(48, 88, 92));
+  tft.setTextColor(rgb(160, 225, 220));
+  tft.setCursor(wx + 10, wy + 8);
+  tft.print("DDS waveform monitor");
+
+  tft.setTextSize(1);
+  tft.setTextColor(rgb(160, 160, 175));
+  tft.setCursor(8, H - 18);
+  tft.print("Encoder will tune frequency when connected");
+
+  layoutDrawn = true;
 }
 
 void drawHeader(uint16_t freq)
@@ -152,23 +201,12 @@ void drawFrequencyPanel(uint16_t freq)
   int x = 8;
   int y = 42;
   int w = W / 2 - 14;
-  int h = 72;
 
-  tft.fillRoundRect(x, y, w, h, 6, rgb(12, 22, 34));
-  tft.drawRoundRect(x, y, w, h, 6, rgb(52, 110, 150));
-  tft.setTextColor(rgb(130, 210, 255));
-  tft.setTextSize(1);
-  tft.setCursor(x + 9, y + 8);
-  tft.print("FREQUENCY");
-
+  tft.fillRect(x + 10, y + 26, w - 20, 26, rgb(12, 22, 34));
   tft.setTextColor(TFT_WHITE);
   tft.setTextSize(3);
   tft.setCursor(x + 12, y + 28);
   tft.print(freq);
-
-  tft.setTextSize(1);
-  tft.setCursor(x + 12, y + 58);
-  tft.print("30 - 2000 Hz sweep");
 }
 
 void drawPowerPanel(uint16_t level)
@@ -176,23 +214,18 @@ void drawPowerPanel(uint16_t level)
   int x = W / 2 + 6;
   int y = 42;
   int w = W / 2 - 14;
-  int h = 72;
-
-  tft.fillRoundRect(x, y, w, h, 6, rgb(18, 16, 28));
-  tft.drawRoundRect(x, y, w, h, 6, rgb(120, 75, 190));
-  tft.setTextSize(1);
-  tft.setTextColor(rgb(220, 190, 255));
-  tft.setCursor(x + 9, y + 8);
-  tft.print("OUTPUT POWER");
 
   int barX = x + 12;
   int barY = y + 32;
   int barW = w - 24;
   int fill = map(level, 0, 100, 0, barW);
+  tft.fillRect(barX, barY, barW, 14, rgb(18, 16, 28));
   tft.drawRect(barX, barY, barW, 14, rgb(90, 90, 120));
   for (int i = 0; i < fill; i++)
     tft.drawFastVLine(barX + i, barY + 1, 12, wheel(i * 3 + frame * 4));
 
+  tft.fillRect(x + 12, y + 53, w - 24, 10, rgb(18, 16, 28));
+  tft.setTextSize(1);
   tft.setTextColor(TFT_WHITE);
   tft.setCursor(x + 12, y + 54);
   tft.print(level);
@@ -207,8 +240,7 @@ void drawWaveform(uint16_t freq)
   int h = 78;
   int cy = y + h / 2;
 
-  tft.fillRoundRect(x, y, w, h, 6, rgb(5, 8, 12));
-  tft.drawRoundRect(x, y, w, h, 6, rgb(48, 88, 92));
+  tft.fillRect(x + 6, y + 22, w - 12, h - 28, rgb(5, 8, 12));
   tft.drawFastHLine(x + 6, cy, w - 12, rgb(35, 45, 55));
 
   float phase = frame * 0.18f;
@@ -227,8 +259,7 @@ void drawWaveform(uint16_t freq)
 
   tft.setTextSize(1);
   tft.setTextColor(rgb(160, 225, 220));
-  tft.setCursor(x + 10, y + 8);
-  tft.print("DDS waveform monitor");
+  tft.fillRect(x + w - 92, y + 8, 82, 8, rgb(5, 8, 12));
   tft.setCursor(x + w - 88, y + 8);
   tft.print(freq);
   tft.print(" Hz");
@@ -240,7 +271,7 @@ void drawOrbit()
   int cy = H - 48;
   int radius = min(W, H) / 8;
 
-  tft.fillCircle(cx, cy, radius + 18, rgb(0, 0, 0));
+  tft.fillCircle(cx, cy, radius + 19, TFT_BLACK);
   tft.drawCircle(cx, cy, radius + 16, rgb(28, 45, 62));
   tft.drawCircle(cx, cy, radius + 8, rgb(20, 32, 45));
 
@@ -252,11 +283,6 @@ void drawOrbit()
     int py = cy + (int)(sinf(b) * (radius + 2));
     tft.fillCircle(px, py, 3 + (i % 3), wheel(i * 25 + frame * 3));
   }
-
-  tft.setTextSize(1);
-  tft.setTextColor(rgb(160, 160, 175));
-  tft.setCursor(8, H - 18);
-  tft.print("Encoder will tune frequency when connected");
 }
 
 void drawFrame()
@@ -275,7 +301,9 @@ void drawFrame()
   uint16_t freq = enc == 0 ? sweep : (uint16_t)tuned;
   uint16_t power = 12 + (uint16_t)((sinf(frame * 0.09f) + 1.0f) * 40.0f);
 
-  tft.fillScreen(TFT_BLACK);
+  if (!layoutDrawn)
+    drawStaticLayout();
+
   drawHeader(freq);
   drawFrequencyPanel(freq);
   drawPowerPanel(power);
@@ -310,6 +338,7 @@ void setup()
   W = tft.width();
   H = tft.height();
   splash();
+  drawStaticLayout();
 }
 
 void loop()
@@ -319,7 +348,7 @@ void loop()
     theme++;
   buttonWasDown = buttonDown;
 
-  if (millis() - lastFrameMs >= 45)
+  if (millis() - lastFrameMs >= FRAME_INTERVAL_MS)
   {
     lastFrameMs = millis();
     frame++;
