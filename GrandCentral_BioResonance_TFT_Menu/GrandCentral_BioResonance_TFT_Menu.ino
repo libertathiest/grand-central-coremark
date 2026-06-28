@@ -58,6 +58,12 @@
 #define TFT_RST       7
 #define TFT_BL        11
 
+// Hardware-free UI demo mode:
+//   1 = test TFT + encoder/menu without AD9833, digital volume, amp enable,
+//       or speaker feedback hardware installed.
+//   0 = real hardware mode.
+#define BIO_UI_DEMO_MODE 1
+
 #define ENC_A  2
 #define ENC_B  3
 #define ENC_SW 4
@@ -862,7 +868,11 @@ uint16_t bioAmpLevel         = 0; // last AMP_LEVEL_ADC reading, 0-1023 (relativ
 // output-level indicator only - not yet calibrated to real watts.
 void bioReadAmpLevel()
 {
+#if BIO_UI_DEMO_MODE
+    bioAmpLevel = 80 + (uint16_t)((sinf(millis() * 0.004f) + 1.0f) * 360.0f);
+#else
     bioAmpLevel = analogRead(AMP_LEVEL_ADC);
+#endif
 }
 
 uint8_t bioWrappedIndex(int16_t index, uint8_t count)
@@ -889,7 +899,9 @@ void bioActivateSelectedPreset()
     const BioPreset   &preset = cat.items[bioSelectedPreset[bioSelectedCategory]];
     bioActivePresetHz = bioClampFrequency(preset.hz);
     bioFrequencyHz    = bioActivePresetHz;
+#if !BIO_UI_DEMO_MODE
     ad9833SetFrequency(bioFrequencyHz);
+#endif
 }
 
 // Drives OUTPUT_ENABLE + the AD9833 sleep bits, and logs ON/OFF
@@ -898,15 +910,19 @@ void bioSetOutputEnabled(bool enabled)
 {
     bool wasEnabled  = bioOutputEnabled;
     bioOutputEnabled = enabled && bioMode != BIO_MAIN;
+#if !BIO_UI_DEMO_MODE
     digitalWrite(BIO_OUTPUT_ENABLE, bioOutputEnabled ? HIGH : LOW);
     ad9833SetSleep(!bioOutputEnabled);
+#endif
 
     // Every OFF->ON transition starts at a safe, low volume so the speaker
     // is never overdriven by whatever level was left from last time.
     if (bioOutputEnabled && !wasEnabled)
     {
         bioVolume = BIO_VOLUME_SAFE_START;
+#if !BIO_UI_DEMO_MODE
         bioApplyVolume();
+#endif
     }
 
     if (bioOutputEnabled != wasEnabled)
@@ -927,10 +943,14 @@ void bioSetOutputEnabled(bool enabled)
 void bioApplyVolume()
 {
     uint8_t wiper = map(bioVolume, 0, 100, 0, 255);
+#if !BIO_UI_DEMO_MODE
     Wire.beginTransmission(MCP4551_I2C_ADDR);
     Wire.write(MCP4551_WIPER_CMD << 4);
     Wire.write(wiper);
     Wire.endTransmission();
+#else
+    (void)wiper;
+#endif
 
     char line[48];
     snprintf(line, sizeof(line), "[%lus] bio: volume %u%%", millis() / 1000,
@@ -1378,7 +1398,9 @@ void bioHandleEncoderDelta(int8_t delta)
     uint8_t step     = bioFrequencyStep();
     bioLastStepSize  = step;
     bioFrequencyHz   = bioClampFrequency((int32_t)bioFrequencyHz + delta * step);
+#if !BIO_UI_DEMO_MODE
     ad9833SetFrequency(bioFrequencyHz);
+#endif
     bioDrawFrequencyMenu();
 }
 
@@ -1405,6 +1427,9 @@ void bioHandleButtons()
 
         bioMode = BIO_FREQUENCY;
         bioActivateSelectedPreset();
+#if BIO_UI_DEMO_MODE
+        bioSetOutputEnabled(true);
+#endif
         bioLastFreqTurnMs = millis();
         bioDrawFrequencyMenu();
     }
@@ -1568,8 +1593,10 @@ void setup()
     digitalWrite(TFT_BL, HIGH);
     digitalWrite(TFT_CS, HIGH);
     digitalWrite(BIO_OUTPUT_ENABLE, LOW);
+#if !BIO_UI_DEMO_MODE
     pinMode(AD9833_FSYNC, OUTPUT);
     digitalWrite(AD9833_FSYNC, HIGH);
+#endif
 
     encPrevState = (digitalRead(ENC_A) << 1) | digitalRead(ENC_B);
     attachInterrupt(digitalPinToInterrupt(ENC_A), encoderISR, CHANGE);
@@ -1582,11 +1609,15 @@ void setup()
     tftBootStatus("TFT OK");
     Serial.println("ST7789 TFT init complete");
 
+#if BIO_UI_DEMO_MODE
+    tftBootStatus("UI demo mode");
+#else
     ad9833Init();
     tftBootStatus("DDS OK");
 
     bioApplyVolume(); // set the MCP4551 digital pot to the default level
     tftBootStatus("Volume OK");
+#endif
 
     // Mount the onboard QSPI flash filesystem (used by "Read Files" and
     // "USB Drive Mode"). If it isn't formatted yet, fsReady stays false
