@@ -83,6 +83,16 @@ void tftFlush()
     // Adafruit_ST7789 draws immediately; this keeps old OLED code readable.
 }
 
+void tftBootStatus(const char *line)
+{
+    static uint8_t row = 0;
+    display.setTextColor(TFT_WHITE);
+    display.setTextSize(2);
+    display.setCursor(8, 8 + row * 24);
+    display.print(line);
+    row++;
+}
+
 // ---------------------------------------------------------------------
 // Onboard QSPI flash filesystem
 // ---------------------------------------------------------------------
@@ -716,10 +726,12 @@ const SPISettings AD9833_SPI_SETTINGS(2000000, MSBFIRST, SPI_MODE2);
 
 void ad9833WriteRegister(uint16_t data)
 {
+    digitalWrite(TFT_CS, HIGH);
     digitalWrite(AD9833_FSYNC, LOW);
     SPI.transfer(data >> 8);
     SPI.transfer(data & 0xFF);
     digitalWrite(AD9833_FSYNC, HIGH);
+    digitalWrite(TFT_CS, HIGH);
 }
 
 void ad9833Init()
@@ -1495,7 +1507,9 @@ void setup()
     pinMode(BIO_OUTPUT_SW, INPUT_PULLUP);
     pinMode(BIO_OUTPUT_ENABLE, OUTPUT);
     pinMode(TFT_BL, OUTPUT);
+    pinMode(TFT_CS, OUTPUT);
     digitalWrite(TFT_BL, HIGH);
+    digitalWrite(TFT_CS, HIGH);
     digitalWrite(BIO_OUTPUT_ENABLE, LOW);
     pinMode(AD9833_FSYNC, OUTPUT);
     digitalWrite(AD9833_FSYNC, HIGH);
@@ -1507,20 +1521,21 @@ void setup()
     display.init(240, 320);
     display.setRotation(1);
     display.fillScreen(TFT_BLACK);
-    display.setTextColor(TFT_WHITE);
-    display.setTextSize(2);
-    display.setCursor(8, 8);
-    display.println("BioResonance TFT");
+    tftBootStatus("BioResonance TFT");
+    tftBootStatus("TFT OK");
     Serial.println("ST7789 TFT init complete");
 
     ad9833Init();
+    tftBootStatus("DDS OK");
 
     bioApplyVolume(); // set the MCP4551 digital pot to the default level
+    tftBootStatus("Volume OK");
 
     // Mount the onboard QSPI flash filesystem (used by "Read Files" and
     // "USB Drive Mode"). If it isn't formatted yet, fsReady stays false
     // and Read Files just shows a message instead of crashing.
     flash.begin();
+    tftBootStatus("Flash begin OK");
 
     // USB Mass Storage - hidden (not ready) until "USB Drive Mode" is
     // selected from the menu, so the host doesn't see the drive while
@@ -1530,6 +1545,7 @@ void setup()
     usb_msc.setCapacity(flash.size() / 512, 512);
     usb_msc.setUnitReady(false);
     usb_msc.begin();
+    tftBootStatus("USB MSC OK");
 
     // The MSC interface above must be present in the USB descriptors from
     // first enumeration - if the host already enumerated us (e.g. as just
@@ -1544,6 +1560,7 @@ void setup()
     if (fatfs.begin(&flash))
     {
         fsReady = true;
+        tftBootStatus("Filesystem OK");
 
         // One-time cleanup: remove leftover CircuitPython files from when
         // this board originally shipped with CircuitPython on the flash.
@@ -1553,9 +1570,12 @@ void setup()
     else
     {
         Serial.println("Flash filesystem not found/formatted");
+        tftBootStatus("No filesystem");
     }
 
     loadStartupApp();
+    tftBootStatus("Starting app");
+    delay(600);
     startAppFromMenuIndex(startupMenuIndex);
 }
 
