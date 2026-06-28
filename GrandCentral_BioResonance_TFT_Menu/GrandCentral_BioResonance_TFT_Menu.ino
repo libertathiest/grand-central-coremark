@@ -1497,7 +1497,8 @@ void setup()
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, HIGH);
     digitalWrite(BIO_OUTPUT_ENABLE, LOW);
-    ad9833Init();
+    pinMode(AD9833_FSYNC, OUTPUT);
+    digitalWrite(AD9833_FSYNC, HIGH);
 
     encPrevState = (digitalRead(ENC_A) << 1) | digitalRead(ENC_B);
     attachInterrupt(digitalPinToInterrupt(ENC_A), encoderISR, CHANGE);
@@ -1506,7 +1507,13 @@ void setup()
     display.init(240, 320);
     display.setRotation(1);
     display.fillScreen(TFT_BLACK);
+    display.setTextColor(TFT_WHITE);
+    display.setTextSize(2);
+    display.setCursor(8, 8);
+    display.println("BioResonance TFT");
     Serial.println("ST7789 TFT init complete");
+
+    ad9833Init();
 
     bioApplyVolume(); // set the MCP4551 digital pot to the default level
 
