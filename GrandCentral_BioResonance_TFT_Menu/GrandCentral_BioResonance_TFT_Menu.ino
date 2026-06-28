@@ -1252,6 +1252,68 @@ void bioDrawVolumeMenu()
     tftFlush();
 }
 
+void bioUpdateLiveIndicators()
+{
+    if (!bioOutputEnabled)
+        return;
+
+    int waveX = 36;
+    int waveY = 54;
+    int waveH = 10;
+    int waveW = 0;
+
+    if (bioMode == BIO_PRESET)
+    {
+        const BioCategory &cat = bioCategories[bioSelectedCategory];
+        int16_t  tx1, ty1;
+        uint16_t titleW, titleH;
+        display.setTextSize(1);
+        display.getTextBounds(cat.name, 0, 0, &tx1, &ty1, &titleW, &titleH);
+
+        const int badgeW = 22;
+        const int badgeX = SCREEN_WIDTH - badgeW;
+        waveX = (int)titleW + 4;
+        waveY = 0;
+        waveH = 8;
+        waveW = badgeX - 2 - waveX;
+    }
+    else
+    {
+        char stepBuf[8];
+        if (bioMode == BIO_VOLUME)
+            snprintf(stepBuf, sizeof(stepBuf), "X%u", BIO_VOLUME_STEP);
+        else
+            snprintf(stepBuf, sizeof(stepBuf), "X%u", bioLastStepSize);
+
+        int16_t  stepX1, stepY1;
+        uint16_t stepW, stepH;
+        display.setTextSize(1);
+        display.getTextBounds(stepBuf, 0, 0, &stepX1, &stepY1, &stepW, &stepH);
+        int stepX = SCREEN_WIDTH - 4 - (int)stepW;
+        waveW = stepX - 4 - waveX;
+    }
+
+    if (waveW > 4)
+    {
+        display.fillRect(waveX, waveY, waveW + 1, waveH, TFT_BLACK);
+        bioDrawWaveform(waveX, waveY, waveW, waveH);
+    }
+
+    if (bioMode == BIO_VOLUME)
+    {
+        char fbBuf[12];
+        snprintf(fbBuf, sizeof(fbBuf), "FB:%u", bioAmpLevel);
+        display.fillRect(SCREEN_WIDTH - 76, 0, 74, 10, TFT_BLACK);
+        display.setTextSize(1);
+        display.setTextColor(TFT_WHITE);
+        int16_t  fbX1, fbY1;
+        uint16_t fbW, fbH;
+        display.getTextBounds(fbBuf, 0, 0, &fbX1, &fbY1, &fbW, &fbH);
+        display.setCursor(SCREEN_WIDTH - (int)fbW - 2, 0);
+        display.print(fbBuf);
+    }
+}
+
 void bioEnter()
 {
     bioMode          = BIO_MAIN;
@@ -1411,12 +1473,7 @@ void bioLoop()
 
     bioWavePhase = (bioWavePhase + 15) % 360;
     bioReadAmpLevel();
-    if (bioMode == BIO_FREQUENCY)
-        bioDrawFrequencyMenu();
-    else if (bioMode == BIO_VOLUME)
-        bioDrawVolumeMenu();
-    else
-        bioDrawPresetMenu();
+    bioUpdateLiveIndicators();
 }
 
 void startAppFromMenuIndex(int index)
